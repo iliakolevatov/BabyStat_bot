@@ -1,4 +1,4 @@
-# Libraties
+# Libraries
 import telebot
 import pandas as pd
 from datetime import datetime

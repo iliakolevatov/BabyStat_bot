@@ -3,8 +3,8 @@ import telebot
 import pandas as pd
 from datetime import datetime
 import re
+import matplotlib.pyplot as plt
 
-# Initialize the bot with its token
 # Initialize the bot with its token
 API_TOKEN = 'YOUR_TELEGRAM_BOT_API_TOKEN'  # Replace with your actual API token
 bot = telebot.TeleBot(API_TOKEN)
@@ -31,6 +31,87 @@ def save_data(df):
     if not today_data.empty:
         today_data.to_csv(daily_csv_file_path, index=False)
 
+# Function to sumup consumed formula
+def consumed_formula(df, date='today'):
+    # Convert date strings to datetime objects
+    if date == 'today':
+        target_date = datetime.today()
+    elif date == 'yesterday':
+        target_date = datetime.today() - timedelta(days=1)
+    else:
+        try:
+            target_date = datetime.strptime(date, '%d.%m.%Y')
+        except ValueError:
+            raise ValueError("Date must be in 'DD.MM.YY' format")
+
+    # Ensure 'feed_timestamp' is a datetime object
+    if not pd.api.types.is_datetime64_any_dtype(df['feed_timestamp']):
+        df['feed_timestamp'] = pd.to_datetime(df['feed_timestamp'])
+
+    # Filter rows for the specified date
+    mask = (df['feed_timestamp'].dt.date == target_date.date())
+    filtered_df = df[mask]
+
+    # Calculate the total consumed formula
+    total_consumed = filtered_df['feed_volume'].sum()
+
+    return total_consumed
+
+def plot_graphs(df, date='today'):
+    # Convert date strings to datetime objects
+    if date == 'today':
+        target_date = datetime.today()
+    elif date == 'yesterday':
+        target_date = datetime.today() - timedelta(days=1)
+    else:
+        try:
+            target_date = datetime.strptime(date, '%d.%m.%Y')
+        except ValueError:
+            raise ValueError("Date must be in 'DD.MM.YY' format")
+
+    # Ensure 'feed_timestamp' is a datetime object
+    if not pd.api.types.is_datetime64_any_dtype(df['feed_timestamp']):
+        df['feed_timestamp'] = pd.to_datetime(df['feed_timestamp'])
+
+    # Filter rows for the specified date
+    mask = (df['feed_timestamp'].dt.date == target_date.date())
+    daily_df = df[mask]
+    
+    
+    # Ensure a directory exists to save the plots
+    os.makedirs('plots', exist_ok=True)
+
+    # File paths for the plots
+    plot1_path = 'plots/daily_consumption.png'
+    plot2_path = 'plots/total_consumption.png'
+
+    
+    # Plot graph consumed milk VS time for given date
+    plt.figure(figsize=(10, 6))
+    plt.plot(daily_df['feed_timestamp'], daily_df['feed_volume'])
+    plt.xlabel('Time')
+    plt.ylabel('Consumed Formula (ml)')
+    plt.title(f'Consumed Formula on {target_date.date()}')
+    plt.xticks(rotation=45)
+    plt.tight_layout()
+    plt.savefig(plot1_path)
+    plt.close()
+
+    # Plot graph of total daily consumption vs date for entire dataframe
+    plt.figure(figsize=(10, 6))
+    plt.figure(figsize=(10, 6))
+    total_daily_consumption.plot(kind='bar')
+    plt.xlabel('Date')
+    plt.ylabel('Total Daily Consumption (ml)')
+    plt.title('Total Daily Consumption of Formula')
+    plt.xticks(rotation=45)
+    plt.tight_layout()
+    plt.savefig(plot2_path)
+    plt.close()
+
+    return plot1_path, plot2_path
+    
+    
 # Message handler
 @bot.message_handler(func=lambda message: True)
 def handle_message(message):
@@ -119,17 +200,56 @@ def handle_message(message):
         else:
             bot.reply_to(message, "No feed record to delete.")
         data_updated = True
+    
+
+    #####
+      # Handle the /plot command
+        
+    if message.text.startswith('/plot'):
+        date = message.text.split(maxsplit=1)
+        if len(date) > 1:
+            date = date[1]
+        else:
+            date = 'today'  # Default to today
+
+        # Call plot_graphs function
+        plot1_path, plot2_path = plot_graphs(data, date)
+
+        # Send the plot images
+        with open(plot1_path, 'rb') as plot1:
+            bot.send_photo(message.chat.id, plot1)
+        with open(plot2_path, 'rb') as plot2:
+            bot.send_photo(message.chat.id, plot2)
+
+    # Handle the /sum command
+    elif message.text.startswith('/sum'):
+        date = message.text.split(maxsplit=1)
+        if len(date) > 1:
+            date = date[1]
+        else:
+            date = 'today'  # Default to today
+
+        # Call consumed_formula function
+        total_consumed = consumed_formula(data, date)
+
+        # Reply with the total consumed formula
+        bot.reply_to(message, f"Total consumed formula for {date}: {total_consumed} ml")
+
     elif message.text.strip() == '/help':
         help_message = (
-            "Here are the commands you can use:\n"
-            "/feed [quantity] [time] - Record feeding with the specified quantity (in ml) and optional time.\n"
-            "/poo - Record a poo event with the current timestamp.\n"
-            "/walk - Record a walk event with the current timestamp.\n"
-            "/bath - Record a bath event with the current timestamp.\n"
-            "/delete_feed - Delete the last feed record.\n"
-            "/help - Get information about the available commands."
+                    "Here are the commands you can use:\n"
+        "/feed [quantity] [time] - Record feeding with the specified quantity (in ml) and optional time.\n"
+        "/poo - Record a poo event with the current timestamp.\n"
+        "/walk - Record a walk event with the current timestamp.\n"
+        "/bath - Record a bath event with the current timestamp.\n"
+        "/delete_feed - Delete the last feed record.\n"
+        "/plot [date] - Plot the graph of the consumed milk for a given date (in DD.MM.YY, or 'today' or 'yesterday') and the total daily consumption vs date.\n"
+        "/sum [date] - Sum up all consumed milk for a given date (in DD.MM.YY, or 'today' or 'yesterday').\n"
+        "/help - Get information about the available commands."
         )
         bot.reply_to(message, help_message)
+
+    # Save data if updated
     if data_updated:
         save_data(data)
 

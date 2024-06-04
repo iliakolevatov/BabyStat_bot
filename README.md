@@ -1,5 +1,5 @@
 # BabyStat_bot
-Telegram_bot to save baby feeding, pooping, bathing, etc.
+Telegram_bot to record baby feeding, pooping, bathing, etc.
 
 Here are the commands you can use:
 
